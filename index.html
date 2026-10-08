@@ -93,7 +93,7 @@ canvas{
   position:absolute;
   inset:-14px;
   border-radius:50%;
-  background:conic-gradient(#ef3300,#ff9a00,#fff2a0,#ff9a00,#ef3300,#ff9a00,#fff2a0,#ff9a00,#ef3300);
+  background:conic-gradient(#e11d48,#ff5c9a,#ffe4ef,#ff5c9a,#e11d48,#ff5c9a,#ffe4ef,#ff5c9a,#e11d48);
   filter:blur(6px);
   animation:spin 2.4s linear infinite;
   opacity:.9
@@ -103,8 +103,8 @@ canvas{
   width:100%;
   height:100%;
   border-radius:50%;
-  border:5px solid #ff8a00;
-  box-shadow:0 0 30px rgba(255,120,0,.7),0 0 70px rgba(239,51,0,.35);
+  border:5px solid #ff5c9a;
+  box-shadow:0 0 30px rgba(255,77,148,.7),0 0 70px rgba(225,29,72,.35);
   display:block;
   background:#0d1730
 }
@@ -113,14 +113,14 @@ canvas{
   left:50%;
   bottom:-12px;
   transform:translateX(-50%);
-  background:#ef4444;
+  background:linear-gradient(135deg,#ff4d94,#e11d48);
   color:#fff;
-  font-size:11px;
+  font-size:12px;
   font-weight:bold;
-  letter-spacing:.15em;
+  letter-spacing:.06em;
   padding:4px 10px;
   border-radius:20px;
-  box-shadow:0 4px 12px rgba(239,68,68,.5);
+  box-shadow:0 4px 12px rgba(225,29,72,.5);
   white-space:nowrap
 }
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -211,7 +211,7 @@ button:active{transform:scale(.97)}
       <div id="card">
         <div id="villainWrap">
           <canvas id="villain" width="256" height="256"></canvas>
-          <div id="villainTag">VILÃ</div>
+          <div id="villainTag">ACERTE O NOSSO CHUCHUZINHO 💘</div>
         </div>
         <h1>KARLA — GUERRA NAS ESTRELAS</h1>
         <div id="newrec">★ NOVO RECORDE! ★</div>
@@ -430,7 +430,7 @@ button:active{transform:scale(.97)}
     {pts:1000, name:"LASER TRIPLO",         spread:[-12,0,12],   rate:.12, color:"#a5f3fc", glow:"#22d3ee"},
     {pts:2000, name:"CHUVA DE 6 TIROS",     spread:S6,           rate:.11, color:"#c4b5fd", glow:"#8b5cf6"},
     {pts:3000, name:"LASER PERFURANTE",     spread:S6,           rate:.10, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true},
-    {pts:4000, name:"+ 3 BOLAS DE FOGO",    spread:S6,           rate:.10, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:true},
+    {pts:4000, name:"+ 3 CORAÇÕES GIGANTES",    spread:S6,           rate:.10, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:true},
     {pts:5000, name:"+ MÍSSEIS TELEGUIADOS",spread:S6,           rate:.09, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:true, missiles:true},
     {pts:6000, name:"MODO SUPERNOVA",       spread:[-30,-20,-10,0,10,20,30], rate:.07, color:"#fecaca", glow:"#ef4444", pierce:true, big:true, balls:true, missiles:true}
   ];
@@ -569,7 +569,7 @@ button:active{transform:scale(.97)}
       });
     }
 
-    // bolas de fogo (4000+): grandes e atravessam tudo
+    // corações gigantes (4000+): grandes e atravessam tudo
     if(up.balls && ballCd<=0){
       for(const deg of [-14,0,14]){
         const a=deg*Math.PI/180;
@@ -1046,7 +1046,7 @@ button:active{transform:scale(.97)}
           vy:(60+Math.random()*60)*dpr,
           life:.3,max:.3,
           size:(3+Math.random()*3)*dpr,
-          color:Math.random()<.5?"#fbbf24":"#f97316"
+          color:Math.random()<.5?"#f9a8d4":"#ff4d94"
         });
       }
     }
@@ -1070,7 +1070,7 @@ button:active{transform:scale(.97)}
           vy:-(40+Math.random()*40)*dpr,
           life:.3,max:.3,
           size:(2+Math.random()*3)*dpr,
-          color:Math.random()<.5?"#fbbf24":"#f97316"
+          color:Math.random()<.5?"#f9a8d4":"#ff4d94"
         });
       }
     }
@@ -1288,7 +1288,7 @@ button:active{transform:scale(.97)}
         f.y,
         f.r*.72
       )){
-        burst(f.x,f.y,14,["#fbbf24","#f97316","#ef4444"],220,4);
+        burst(f.x,f.y,14,["#f9a8d4","#ff4d94","#e11d48"],220,4);
         fires.splice(i,1);
         damage(f.x,f.y);
       }
@@ -1316,7 +1316,7 @@ button:active{transform:scale(.97)}
     if(w>weapon){
       weapon=w;
       showBanner("UPGRADE! "+UPGRADES[w].name,"#fbbf24",1.8);
-      floatText(ship.x,ship.y-ship.h,"⬆ "+UPGRADES[w].name,"#fbbf24",true);
+      floatText(W/2,ship.y-ship.h,"⬆ "+UPGRADES[w].name,"#fbbf24",true);
       floatText(W/2,H*.46,"⚠ O PERIGO AUMENTOU!","#fb7185",true);
       burst(ship.x,ship.y,40,["#fbbf24","#fde68a","#fff","#38bdf8"],300,4);
       sfx.upgrade();
@@ -1327,29 +1327,36 @@ button:active{transform:scale(.97)}
   }
 
   // ---------- Desenho ----------
+  // coraçãozinho (substitui o fogo)
   function drawFire(cx,cy,r,rot){
     ctx.save();
 
     ctx.translate(cx,cy);
     ctx.rotate(rot||0);
 
-    const g=ctx.createRadialGradient(0,-r*.15,2,0,0,r);
-
-    g.addColorStop(0,"#fff2a0");
-    g.addColorStop(.45,"#ff9a00");
-    g.addColorStop(1,"#ef3300");
+    const g=ctx.createRadialGradient(-r*.35,-r*.4,1,0,0,r*1.2);
+    g.addColorStop(0,"#ffe4ef");
+    g.addColorStop(.4,"#ff5c9a");
+    g.addColorStop(1,"#e11d48");
 
     ctx.fillStyle=g;
     ctx.shadowBlur=16*dpr;
-    ctx.shadowColor="#ff6800";
+    ctx.shadowColor="#ff4d94";
 
     ctx.beginPath();
-    ctx.moveTo(0,-r*1.25);
-    ctx.quadraticCurveTo(r*1.05,0,0,r);
-    ctx.quadraticCurveTo(-r*1.05,0,0,-r*1.25);
+    ctx.moveTo(0,r*.95);
+    ctx.bezierCurveTo(-r*1.35,-r*.05,-r*.75,-r*1.15,0,-r*.45);
+    ctx.bezierCurveTo(r*.75,-r*1.15,r*1.35,-r*.05,0,r*.95);
+    ctx.closePath();
     ctx.fill();
 
+    // brilho
     ctx.shadowBlur=0;
+    ctx.fillStyle="rgba(255,255,255,.55)";
+    ctx.beginPath();
+    ctx.ellipse(-r*.42,-r*.42,r*.18,r*.11,-.7,0,Math.PI*2);
+    ctx.fill();
+
     ctx.restore();
   }
 
@@ -1555,7 +1562,7 @@ button:active{transform:scale(.97)}
     // bolas de fogo
     for(const b of shots){
       if(!b.ball) continue;
-      drawFire(b.x,b.y,b.r,Math.PI+b.ang);
+      drawFire(b.x,b.y,b.r,b.ang);
     }
 
     // fogo em volta do inimigo especial
@@ -1566,7 +1573,7 @@ button:active{transform:scale(.97)}
       const cx=e.x + Math.cos(s.ang)*s.rad;
       const cy=e.y + Math.sin(s.ang)*s.rad;
 
-      drawFire(cx,cy,10*dpr,s.ang);
+      drawFire(cx,cy,10*dpr,Math.sin(s.ang*2)*.3);
     }
 
     // inimigos
@@ -1718,9 +1725,14 @@ button:active{transform:scale(.97)}
       ctx.fillStyle=banner.color;
       ctx.shadowBlur=20*dpr;
       ctx.shadowColor=banner.color;
-      ctx.font="bold "+(34*dpr)+"px Arial";
       ctx.textAlign="center";
-      ctx.fillText(banner.txt,W/2,H*.38);
+      // quebra em linhas e reduz a fonte para caber na largura da tela
+      const lines=banner.txt.startsWith("UPGRADE! ") ? ["UPGRADE!",banner.txt.slice(9)] : [banner.txt];
+      let fs=34*dpr;
+      ctx.font="bold "+fs+"px Arial";
+      const widest=Math.max(...lines.map(l=>ctx.measureText(l).width));
+      if(widest>W*.9){ fs=fs*W*.9/widest; ctx.font="bold "+fs+"px Arial"; }
+      lines.forEach((l,i)=>ctx.fillText(l,W/2,H*.38+(i-(lines.length-1)/2)*fs*1.15));
       ctx.shadowBlur=0;
       ctx.globalAlpha=1;
     }
