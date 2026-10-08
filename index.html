@@ -385,6 +385,8 @@ button:active{transform:scale(.97)}
       tone("sawtooth",160,30,.7,.25);
       noise(.6,.6,1200);
     },
+    tick(){ tone("square",700,500,.03,.04); },
+    pop(){ noise(.12,.8,5000,"highpass"); tone("sine",900,120,.18,.35); noise(.3,.4,1500); },
     missile(){ tone("sawtooth",500,1200,.15,.08); noise(.12,.15,3000,"highpass"); },
     ball(){ noise(.25,.45,1500,"bandpass"); tone("sawtooth",300,90,.22,.18); },
     upgrade(){ [523,659,784,1046,1318].forEach((f,i)=>tone("square",f,f*1.02,.12,.2,i*.06)); },
@@ -415,6 +417,7 @@ button:active{transform:scale(.97)}
 
   let shots=[], enemies=[], fires=[], powers=[], stars=[], sparks=[];
   let rocks=[], meteors=[], rockCd=3, meteorCd=4;
+  let balloons=[], balloonCd=4;
   let particles=[], floaters=[];
 
   let enemyCd=0, fireCd=0, powerCd=8, shotCd=0, nextSpecialAt=10;
@@ -499,6 +502,7 @@ button:active{transform:scale(.97)}
 
     shots=[]; enemies=[]; fires=[]; powers=[]; sparks=[];
     rocks=[]; meteors=[]; rockCd=3; meteorCd=4;
+    balloons=[]; balloonCd=4;
     particles=[]; floaters=[];
 
     ship={x:W/2,y:shipY(),w:76*dpr,h:44*dpr};
@@ -694,6 +698,39 @@ button:active{transform:scale(.97)}
     });
   }
 
+  // balões com o rosto: cada cor precisa de mais tiros para estourar
+  const BALLOONS=[
+    {tier:1, hp:4,  color:"#22c55e", dark:"#15803d", name:"VERDE"},
+    {tier:1, hp:5,  color:"#3b82f6", dark:"#1d4ed8", name:"AZUL"},
+    {tier:2, hp:10, color:"#a855f7", dark:"#7e22ce", name:"ROXO"},
+    {tier:3, hp:15, color:"#f97316", dark:"#c2410c", name:"LARANJA"},
+    {tier:4, hp:20, color:"#ef4444", dark:"#b91c1c", name:"VERMELHO"},
+    {tier:5, hp:30, color:"#facc15", dark:"#1f2937", name:"DOURADO"}
+  ];
+  function spawnBalloon(){
+    const w=tier();
+    const opts=BALLOONS.filter(b=>b.tier<=w);
+    if(!opts.length) return;
+    // os mais novos (mais fortes) aparecem com mais frequência
+    let pick=opts[0];
+    const tot=opts.reduce((s,b,i)=>s+i+1,0);
+    let r=Math.random()*tot;
+    for(let i=0;i<opts.length;i++){ r-=i+1; if(r<=0){pick=opts[i];break;} }
+    const size=(58+pick.hp*1.3)*dpr;
+    balloons.push({
+      x:size/2+Math.random()*(W-size),
+      y:-size,
+      w:size,
+      h:size*1.2,
+      hp:pick.hp,
+      max:pick.hp,
+      type:pick,
+      vy:(55+Math.random()*35)*dpr*(1+w*.06),
+      ph:Math.random()*6,
+      hitT:0
+    });
+  }
+
   function spawnPower(){
     const s=50*dpr;
 
@@ -852,6 +889,7 @@ button:active{transform:scale(.97)}
       updateEffects(dt);
       for(const e of enemies){ e.y+=e.v*dt*.4; }
       for(const r of rocks){ r.y+=r.vy*dt*.4; r.rot+=r.vr*dt; }
+      for(const bl of balloons){ bl.y+=bl.vy*dt*.4; }
       if(dying<=0) gameOver();
       return;
     }
@@ -954,6 +992,12 @@ button:active{transform:scale(.97)}
       meteorCd=Math.max(.6,2.6-tier()*.3)+Math.random();
     }
 
+    balloonCd-=dt;
+    if(tier()>=1 && balloonCd<=0){
+      spawnBalloon();
+      balloonCd=Math.max(1.8,6-tier()*.6)+Math.random()*2;
+    }
+
     if(powerCd<=0){
       spawnPower();
       powerCd=12+Math.random()*7;
@@ -1047,6 +1091,14 @@ button:active{transform:scale(.97)}
     }
     meteors=meteors.filter(m=>m.y<H+40*dpr && m.x>-40*dpr && m.x<W+40*dpr);
 
+    for(const bl of balloons){
+      bl.y+=bl.vy*dt;
+      bl.ph+=dt*1.6;
+      bl.x+=Math.sin(bl.ph)*30*dpr*dt;
+      bl.hitT=Math.max(0,bl.hitT-dt);
+    }
+    balloons=balloons.filter(bl=>bl.y-bl.h/2<H+40*dpr);
+
     for(const p of powers){
       p.y+=p.v*dt;
       p.ph+=dt*4;
@@ -1121,6 +1173,45 @@ button:active{transform:scale(.97)}
           floatText(e.x,H-30*dpr,"ESCAPOU!","#fb7185",false);
         }
         damage();
+      }
+    }
+
+    // tiros x balões
+    for(let i=balloons.length-1;i>=0;i--){
+      const bl=balloons[i];
+      const br=bl.w/2;
+      for(let j=shots.length-1;j>=0;j--){
+        const b=shots[j];
+        if(b.pierce && b.hits.has(bl)) continue;
+        const dx=b.x-bl.x, dy=(b.y-bl.y)/1.2, rr=br+b.r;
+        if(dx*dx+dy*dy<rr*rr){
+          if(b.pierce) b.hits.add(bl); else shots.splice(j,1);
+          bl.hp-=b.ball?3:1;
+          bl.hitT=.08;
+          burst(b.x,b.y,3,[bl.type.color,"#fff"],100,3);
+          sfx.tick();
+          if(bl.hp<=0){
+            balloons.splice(i,1);
+            const pts=bl.max*5*mult;
+            score+=pts;
+            burst(bl.x,bl.y,40+bl.max,[bl.type.color,bl.type.dark,"#fff","#fde68a"],340,5);
+            floatText(bl.x,bl.y,"POP! +"+pts,bl.type.color,true);
+            sfx.pop();
+            addShake(bl.max>=15?9:4);
+            break;
+          }
+        }
+      }
+    }
+
+    // balões x aeronave (escapar pelo fundo não tira vida)
+    for(let i=balloons.length-1;i>=0;i--){
+      const bl=balloons[i];
+      if(circleShip(bl.x,bl.y,bl.w*.42)){
+        burst(bl.x,bl.y,30,[bl.type.color,"#fff"],280,5);
+        balloons.splice(i,1);
+        sfx.pop();
+        damage(bl.x,bl.y);
       }
     }
 
@@ -1505,6 +1596,62 @@ button:active{transform:scale(.97)}
         ctx.arc(e.x,e.y,e.w/2+10*dpr,0,Math.PI*2);
         ctx.stroke();
       }
+    }
+
+    // balões com o rosto
+    for(const bl of balloons){
+      const sq=bl.hitT>0?1.06:1;
+      const bw=bl.w/2*sq, bh=bl.h/2/sq;
+      // cordinha
+      ctx.strokeStyle="rgba(255,255,255,.6)";
+      ctx.lineWidth=1.5*dpr;
+      ctx.beginPath();
+      ctx.moveTo(bl.x,bl.y+bh);
+      ctx.quadraticCurveTo(bl.x+Math.sin(bl.ph*2)*10*dpr,bl.y+bh+18*dpr,bl.x,bl.y+bh+34*dpr);
+      ctx.stroke();
+      // nó
+      ctx.fillStyle=bl.type.dark;
+      ctx.beginPath();
+      ctx.moveTo(bl.x-5*dpr,bl.y+bh+6*dpr);
+      ctx.lineTo(bl.x+5*dpr,bl.y+bh+6*dpr);
+      ctx.lineTo(bl.x,bl.y+bh-2*dpr);
+      ctx.fill();
+      // corpo do balão
+      const bg=ctx.createRadialGradient(bl.x-bw*.35,bl.y-bh*.4,2,bl.x,bl.y,bh);
+      bg.addColorStop(0,bl.hitT>0?"#fff":bl.type.color);
+      bg.addColorStop(1,bl.type.dark);
+      ctx.fillStyle=bg;
+      ctx.shadowBlur=14*dpr;
+      ctx.shadowColor=bl.type.color;
+      ctx.beginPath();
+      ctx.ellipse(bl.x,bl.y,bw,bh,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur=0;
+      // rosto
+      const fs=bw*1.35;
+      if(sprites.enemy){
+        ctx.drawImage(sprites.enemy,bl.x-fs/2,bl.y-fs/2,fs,fs);
+      }
+      ctx.lineWidth=3*dpr;
+      ctx.strokeStyle=bl.type.color;
+      ctx.beginPath();
+      ctx.arc(bl.x,bl.y,fs/2,0,Math.PI*2);
+      ctx.stroke();
+      // brilho
+      ctx.fillStyle="rgba(255,255,255,.35)";
+      ctx.beginPath();
+      ctx.ellipse(bl.x-bw*.5,bl.y-bh*.55,bw*.16,bh*.1,-.6,0,Math.PI*2);
+      ctx.fill();
+      // barra de resistência
+      const bwid=bl.w*.8, bx=bl.x-bwid/2, by=bl.y-bh-12*dpr;
+      ctx.fillStyle="rgba(0,0,0,.55)";
+      ctx.fillRect(bx,by,bwid,6*dpr);
+      ctx.fillStyle=bl.type.color;
+      ctx.fillRect(bx,by,bwid*(bl.hp/bl.max),6*dpr);
+      ctx.fillStyle="#fff";
+      ctx.font="bold "+(11*dpr)+"px Arial";
+      ctx.textAlign="center";
+      ctx.fillText(bl.hp,bl.x,by-4*dpr);
     }
 
     // powerup de imunidade
