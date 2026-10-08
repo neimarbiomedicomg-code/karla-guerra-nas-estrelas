@@ -308,14 +308,24 @@ button:active{transform:scale(.97)}
   let ac=null, master=null, noiseBuf=null;
 
   function initAudio(){
-    if(ac) { if(ac.state==="suspended") ac.resume(); return; }
+    if(ac) { if(ac.state!=="running") ac.resume(); return; }
     try{
       const AC=window.AudioContext||window.webkitAudioContext;
       if(!AC) return;
       ac=new AC();
+      // compressor evita estourar quando vários sons tocam juntos
+      const comp=ac.createDynamicsCompressor();
+      comp.threshold.value=-14;
+      comp.knee.value=10;
+      comp.ratio.value=6;
+      comp.connect(ac.destination);
       master=ac.createGain();
-      master.gain.value=muted?0:.5;
-      master.connect(ac.destination);
+      master.gain.value=muted?0:1;
+      master.connect(comp);
+      // desbloqueio de áudio (iPhone/Android exigem um som após o toque)
+      const sb=ac.createBuffer(1,1,22050);
+      const ss=ac.createBufferSource();
+      ss.buffer=sb; ss.connect(ac.destination); ss.start(0);
       noiseBuf=ac.createBuffer(1,ac.sampleRate*.5,ac.sampleRate);
       const d=noiseBuf.getChannelData(0);
       for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
@@ -336,13 +346,13 @@ button:active{transform:scale(.97)}
     o.start(t0); o.stop(t0+dur+.02);
   }
 
-  function noise(dur,vol,freq){
+  function noise(dur,vol,freq,type){
     if(!ac||muted||!noiseBuf) return;
     const t0=ac.currentTime;
     const s=ac.createBufferSource();
     s.buffer=noiseBuf;
     const f=ac.createBiquadFilter();
-    f.type="lowpass";
+    f.type=type||"lowpass";
     f.frequency.setValueAtTime(freq||1800,t0);
     f.frequency.exponentialRampToValueAtTime(120,t0+dur);
     const g=ac.createGain();
@@ -353,21 +363,39 @@ button:active{transform:scale(.97)}
   }
 
   const sfx={
-    shoot(){ tone("square",880,440,.07,.05); },
-    boom(){ noise(.28,.35,2200); tone("triangle",180,50,.25,.18); },
-    bigBoom(){ noise(.6,.5,3000); tone("sawtooth",140,30,.6,.22); },
-    hit(){ noise(.35,.45,900); tone("sawtooth",220,60,.35,.2); },
-    power(){ [523,659,784,1046].forEach((f,i)=>tone("triangle",f,f,.12,.16,i*.07)); },
-    warn(){ tone("square",660,660,.09,.08); tone("square",880,880,.09,.08,.12); },
-    level(){ [392,523,659].forEach((f,i)=>tone("triangle",f,f*1.01,.14,.14,i*.09)); },
-    over(){ [392,330,262,196].forEach((f,i)=>tone("triangle",f,f*.98,.25,.18,i*.18)); }
+    // tiro laser: "piu" agudo descendo + estalo
+    shoot(){
+      tone("square",1400,220,.11,.13);
+      tone("sawtooth",900,160,.09,.07);
+      noise(.03,.12,6000,"highpass");
+    },
+    // explosão: estrondo grave + chiado de destroços
+    boom(){
+      noise(.45,.8,3200);
+      noise(.18,.35,7000,"highpass");
+      tone("sine",150,38,.4,.55);
+      tone("triangle",90,30,.3,.3);
+    },
+    // explosão grande (especial e nave)
+    bigBoom(){
+      noise(.9,1,4000);
+      noise(.35,.5,8000,"highpass");
+      tone("sine",120,25,.8,.8);
+      tone("sawtooth",160,30,.7,.25);
+      noise(.6,.6,1200);
+    },
+    hit(){ noise(.4,.7,1200); tone("sawtooth",260,50,.4,.35); },
+    power(){ [523,659,784,1046].forEach((f,i)=>tone("triangle",f,f,.14,.28,i*.07)); },
+    warn(){ tone("square",660,660,.1,.15); tone("square",880,880,.1,.15,.13); },
+    level(){ [392,523,659].forEach((f,i)=>tone("triangle",f,f*1.01,.16,.25,i*.09)); },
+    over(){ [392,330,262,196].forEach((f,i)=>tone("triangle",f,f*.98,.28,.3,i*.18)); }
   };
 
   function setMuted(m){
     muted=m;
     save("karla_muted",m?"1":"0");
     muteBtn.textContent=m?"SOM: OFF":"SOM: ON";
-    if(master) master.gain.value=m?0:.5;
+    if(master) master.gain.value=m?0:1;
   }
 
   // ---------- Estado ----------
@@ -1225,6 +1253,11 @@ button:active{transform:scale(.97)}
       draw();
     }
   }
+
+  // ---------- Desbloqueio de som no primeiro toque ----------
+  ["touchstart","pointerdown","keydown"].forEach(ev=>{
+    window.addEventListener(ev,()=>{ if(!muted) initAudio(); },{passive:true});
+  });
 
   // ---------- Controles ----------
   function setTarget(clientX){
