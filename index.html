@@ -96,7 +96,7 @@ canvas{
   position:absolute;
   inset:-14px;
   border-radius:50%;
-  background:conic-gradient(#e11d48,#ff5c9a,#ffe4ef,#ff5c9a,#e11d48,#ff5c9a,#ffe4ef,#ff5c9a,#e11d48);
+  background:conic-gradient(#ef3300,#ff9a00,#fff2a0,#ff9a00,#ef3300,#ff9a00,#fff2a0,#ff9a00,#ef3300);
   filter:blur(6px);
   animation:spin 2.4s linear infinite;
   opacity:.9
@@ -106,8 +106,8 @@ canvas{
   width:100%;
   height:100%;
   border-radius:50%;
-  border:5px solid #ff5c9a;
-  box-shadow:0 0 30px rgba(255,77,148,.7),0 0 70px rgba(225,29,72,.35);
+  border:5px solid #ff8a00;
+  box-shadow:0 0 30px rgba(255,120,0,.7),0 0 70px rgba(239,51,0,.35);
   display:block;
   background:#0d1730
 }
@@ -116,7 +116,7 @@ canvas{
   left:50%;
   bottom:-12px;
   transform:translateX(-50%);
-  background:linear-gradient(135deg,#ff4d94,#e11d48);
+  background:linear-gradient(135deg,#f97316,#dc2626);
   color:#fff;
   font-size:12px;
   font-weight:bold;
@@ -218,12 +218,12 @@ button:active{transform:scale(.97)}
       <div id="card">
         <div id="villainWrap">
           <canvas id="villain" width="256" height="256"></canvas>
-          <div id="villainTag">ACERTE O NOSSO CHUCHUZINHO 💘</div>
+          <div id="villainTag">ACERTE O NOSSO CHUCHUZINHO 🔥</div>
         </div>
         <h1>KARLA — GUERRA NAS ESTRELAS</h1>
         <div id="newrec">★ NOVO RECORDE! ★</div>
         <p id="info"></p>
-        <div class="keys" style="margin:0 0 8px;opacity:.85">A cada 1000 pontos sua nave ganha uma arma nova ⬆</div>
+        <div class="keys" style="margin:0 0 8px;opacity:.85">Upgrades da arma em 3.000, 10.000 e 30.000 pts • levou dano, perde o upgrade ⬇</div>
         <div id="record">Recorde: 0</div>
         <button id="start">JOGAR</button>
         <div class="keys">Computador: ← → ou A/D movem • Espaço atira • P pausa • M som • F foto</div>
@@ -400,6 +400,7 @@ button:active{transform:scale(.97)}
     pop(){ noise(.12,.8,5000,"highpass"); tone("sine",900,120,.18,.35); noise(.3,.4,1500); },
     missile(){ tone("sawtooth",500,1200,.15,.08); noise(.12,.15,3000,"highpass"); },
     ball(){ noise(.25,.45,1500,"bandpass"); tone("sawtooth",300,90,.22,.18); },
+    lose(){ [660,520,390,260].forEach((f,i)=>tone("square",f,f*.97,.12,.16,i*.08)); },
     upgrade(){ [523,659,784,1046,1318].forEach((f,i)=>tone("square",f,f*1.02,.12,.2,i*.06)); },
     hit(){ noise(.4,.7,1200); tone("sawtooth",260,50,.4,.35); },
     power(){ [523,659,784,1046].forEach((f,i)=>tone("triangle",f,f,.14,.28,i*.07)); },
@@ -435,23 +436,22 @@ button:active{transform:scale(.97)}
   let enemyCd=0, fireCd=0, powerCd=8, shotCd=0, nextSpecialAt=10;
   let weapon=0, ballCd=0, missileCd=0;
 
-  // Upgrades da nave: a cada 1000 pontos uma arma nova e mais eficiente
-  const S6=[-25,-15,-5,5,15,25];
+  // Upgrades da nave: 3.000, 10.000 e 30.000 pontos (perde 1 upgrade ao levar dano)
   const UPGRADES=[
-    {pts:0,    name:"LASER SIMPLES",        spread:[0],          rate:.12, color:"#eaf6ff", glow:"#38bdf8"},
-    {pts:1000, name:"LASER TRIPLO",         spread:[-12,0,12],   rate:.12, color:"#a5f3fc", glow:"#22d3ee"},
-    {pts:2000, name:"CHUVA DE 6 TIROS",     spread:S6,           rate:.11, color:"#c4b5fd", glow:"#8b5cf6"},
-    {pts:3000, name:"LASER PERFURANTE",     spread:S6,           rate:.10, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true},
-    {pts:4000, name:"+ 3 CORAÇÕES GIGANTES",    spread:S6,           rate:.10, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:true},
-    {pts:5000, name:"+ MÍSSEIS TELEGUIADOS",spread:S6,           rate:.09, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:true, missiles:true},
-    {pts:6000, name:"MODO SUPERNOVA",       spread:[-30,-20,-10,0,10,20,30], rate:.07, color:"#fecaca", glow:"#ef4444", pierce:true, big:true, balls:true, missiles:true}
+    {pts:0,     name:"LASER SIMPLES",       spread:[0],                 rate:.14, color:"#eaf6ff", glow:"#38bdf8"},
+    {pts:3000,  name:"LASER TRIPLO",        spread:[-10,0,10],          rate:.14, color:"#a5f3fc", glow:"#22d3ee"},
+    {pts:10000, name:"5 TIROS + BOLAS DE FOGO", spread:[-20,-10,0,10,20], rate:.13, color:"#c4b5fd", glow:"#8b5cf6", balls:2, ballRate:.9},
+    {pts:30000, name:"MODO SUPERNOVA",      spread:[-25,-15,-5,5,15,25], rate:.12, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:3, ballRate:.8, missiles:true}
   ];
-  // dificuldade acompanha o upgrade da nave
-  function tier(){ return weapon; }
-  function weaponFor(s){
-    let w=0;
-    for(let i=0;i<UPGRADES.length;i++) if(s>=UPGRADES[i].pts) w=i;
-    return w;
+  let wp=0, lastScore=0, danger=0;
+
+  // dificuldade sobe com a pontuação (não cai quando perde o upgrade)
+  const DANGER=[0,1500,3000,6000,10000,18000,30000];
+  function tier(){ return danger; }
+  function dangerFor(s){
+    let d=0;
+    for(let i=0;i<DANGER.length;i++) if(s>=DANGER[i]) d=i;
+    return d;
   }
 
   let touching=false, targetX=0;
@@ -511,6 +511,7 @@ button:active{transform:scale(.97)}
     shotCd=0;
     nextSpecialAt=10;
     weapon=0; ballCd=0; missileCd=0;
+    wp=0; lastScore=0; danger=0;
 
     shots=[]; enemies=[]; fires=[]; powers=[]; sparks=[];
     rocks=[]; meteors=[]; rockCd=3; meteorCd=4;
@@ -582,9 +583,10 @@ button:active{transform:scale(.97)}
       });
     }
 
-    // corações gigantes (4000+): grandes e atravessam tudo
+    // bolas de fogo (10.000+): grandes e atravessam tudo
     if(up.balls && ballCd<=0){
-      for(const deg of [-14,0,14]){
+      const ballDegs=up.balls>=3?[-14,0,14]:[-8,8];
+      for(const deg of ballDegs){
         const a=deg*Math.PI/180;
         shots.push({
           x:ship.x,
@@ -592,13 +594,13 @@ button:active{transform:scale(.97)}
           vx:Math.sin(a)*560*dpr,
           vy:Math.cos(a)*560*dpr,
           ang:a,
-          r:14*dpr,
+          r:12*dpr,
           ball:true,
           pierce:true,
           hits:new Set()
         });
       }
-      ballCd=.45;
+      ballCd=up.ballRate||.9;
       sfx.ball();
     }
 
@@ -617,7 +619,7 @@ button:active{transform:scale(.97)}
           life:3
         });
       }
-      missileCd=.6;
+      missileCd=1;
       sfx.missile();
     }
 
@@ -713,12 +715,13 @@ button:active{transform:scale(.97)}
 
   // balões com o rosto: cada cor precisa de mais tiros para estourar
   const BALLOONS=[
-    {tier:1, hp:4,  color:"#22c55e", dark:"#15803d", name:"VERDE"},
-    {tier:1, hp:5,  color:"#3b82f6", dark:"#1d4ed8", name:"AZUL"},
-    {tier:2, hp:10, color:"#a855f7", dark:"#7e22ce", name:"ROXO"},
-    {tier:3, hp:15, color:"#f97316", dark:"#c2410c", name:"LARANJA"},
-    {tier:4, hp:20, color:"#ef4444", dark:"#b91c1c", name:"VERMELHO"},
-    {tier:5, hp:30, color:"#facc15", dark:"#1f2937", name:"DOURADO"}
+    {tier:0, hp:5,  color:"#22c55e", dark:"#15803d", name:"VERDE"},
+    {tier:1, hp:8,  color:"#3b82f6", dark:"#1d4ed8", name:"AZUL"},
+    {tier:2, hp:12, color:"#a855f7", dark:"#7e22ce", name:"ROXO"},
+    {tier:3, hp:20, color:"#f97316", dark:"#c2410c", name:"LARANJA"},
+    {tier:4, hp:30, color:"#ef4444", dark:"#b91c1c", name:"VERMELHO"},
+    {tier:5, hp:40, color:"#facc15", dark:"#1f2937", name:"DOURADO"},
+    {tier:6, hp:60, color:"#e5e7eb", dark:"#111827", name:"DIAMANTE"}
   ];
   function spawnBalloon(){
     const w=tier();
@@ -729,7 +732,7 @@ button:active{transform:scale(.97)}
     const tot=opts.reduce((s,b,i)=>s+i+1,0);
     let r=Math.random()*tot;
     for(let i=0;i<opts.length;i++){ r-=i+1; if(r<=0){pick=opts[i];break;} }
-    const size=(58+pick.hp*1.3)*dpr;
+    const size=(56+Math.min(pick.hp,60)*.9)*dpr;
     balloons.push({
       x:size/2+Math.random()*(W-size),
       y:-size,
@@ -851,6 +854,14 @@ button:active{transform:scale(.97)}
 
     lives--;
     hurt=1.2;
+
+    // levou dano: perde o upgrade atual da arma
+    if(weapon>0){
+      weapon--;
+      wp=UPGRADES[weapon].pts;
+      showBanner("ARMA PERDIDA! ⬇ "+UPGRADES[weapon].name,"#fb7185",1.6);
+      sfx.lose();
+    }
     combo=0; mult=1; comboT=0;
     flash=.35;
     addShake(14);
@@ -1048,9 +1059,10 @@ button:active{transform:scale(.97)}
     }
 
     balloonCd-=dt;
-    if(tier()>=1 && balloonCd<=0){
+    if(balloonCd<=0){
       spawnBalloon();
-      balloonCd=Math.max(1.8,6-tier()*.6)+Math.random()*2;
+      if(tier()>=3 && Math.random()<.35) spawnBalloon();
+      balloonCd=Math.max(1.3,4.5-tier()*.5)+Math.random()*1.5;
     }
 
     if(powerCd<=0){
@@ -1101,7 +1113,7 @@ button:active{transform:scale(.97)}
           vy:(60+Math.random()*60)*dpr,
           life:.3,max:.3,
           size:(3+Math.random()*3)*dpr,
-          color:Math.random()<.5?"#f9a8d4":"#ff4d94"
+          color:Math.random()<.5?"#fbbf24":"#f97316"
         });
       }
     }
@@ -1125,7 +1137,7 @@ button:active{transform:scale(.97)}
           vy:-(40+Math.random()*40)*dpr,
           life:.3,max:.3,
           size:(2+Math.random()*3)*dpr,
-          color:Math.random()<.5?"#f9a8d4":"#ff4d94"
+          color:Math.random()<.5?"#fbbf24":"#f97316"
         });
       }
     }
@@ -1277,7 +1289,7 @@ button:active{transform:scale(.97)}
         const dx=b.x-bl.x, dy=(b.y-bl.y)/1.2, rr=br+b.r;
         if(dx*dx+dy*dy<rr*rr){
           if(b.pierce) b.hits.add(bl); else shots.splice(j,1);
-          bl.hp-=b.ball?3:1;
+          bl.hp-=b.ball?2:1;
           bl.hitT=.08;
           burst(b.x,b.y,3,[bl.type.color,"#fff"],100,3);
           sfx.tick();
@@ -1315,7 +1327,7 @@ button:active{transform:scale(.97)}
         const dx=b.x-r.x, dy=b.y-r.y, rr=r.r+b.r;
         if(dx*dx+dy*dy<rr*rr){
           if(b.pierce) b.hits.add(r); else shots.splice(j,1);
-          r.hp-=b.ball?3:1;
+          r.hp-=b.ball?2:1;
           r.flash=.08;
           burst(b.x,b.y,4,["#a8a29e","#d6d3d1"],120,3);
           if(r.hp<=0){
@@ -1379,7 +1391,7 @@ button:active{transform:scale(.97)}
         f.y,
         f.r*.72
       )){
-        burst(f.x,f.y,14,["#f9a8d4","#ff4d94","#e11d48"],220,4);
+        burst(f.x,f.y,14,["#fbbf24","#f97316","#ef4444"],220,4);
         fires.splice(i,1);
         damage(f.x,f.y);
       }
@@ -1402,15 +1414,23 @@ button:active{transform:scale(.97)}
       }
     }
 
-    // upgrade da nave a cada mil pontos
-    const w=weaponFor(score);
-    if(w>weapon){
-      weapon=w;
-      showBanner("UPGRADE! "+UPGRADES[w].name,"#fbbf24",1.8);
-      floatText(W/2,ship.y-ship.h,"⬆ "+UPGRADES[w].name,"#fbbf24",true);
-      floatText(W/2,H*.46,"⚠ O PERIGO AUMENTOU!","#fb7185",true);
+    // pontos ganhos contam para o próximo upgrade da arma
+    if(score>lastScore) wp+=score-lastScore;
+    lastScore=score;
+    while(weapon<UPGRADES.length-1 && wp>=UPGRADES[weapon+1].pts){
+      weapon++;
+      showBanner("UPGRADE! "+UPGRADES[weapon].name,"#fbbf24",1.8);
+      floatText(W/2,ship.y-ship.h,"⬆ "+UPGRADES[weapon].name,"#fbbf24",true);
       burst(ship.x,ship.y,40,["#fbbf24","#fde68a","#fff","#38bdf8"],300,4);
       sfx.upgrade();
+    }
+
+    // perigo aumenta com a pontuação
+    const dz=dangerFor(score);
+    if(dz>danger){
+      danger=dz;
+      floatText(W/2,H*.46,"⚠ O PERIGO AUMENTOU!","#fb7185",true);
+      sfx.warn();
     }
 
     updateEffects(dt);
@@ -1418,36 +1438,29 @@ button:active{transform:scale(.97)}
   }
 
   // ---------- Desenho ----------
-  // coraçãozinho (substitui o fogo)
   function drawFire(cx,cy,r,rot){
     ctx.save();
 
     ctx.translate(cx,cy);
     ctx.rotate(rot||0);
 
-    const g=ctx.createRadialGradient(-r*.35,-r*.4,1,0,0,r*1.2);
-    g.addColorStop(0,"#ffe4ef");
-    g.addColorStop(.4,"#ff5c9a");
-    g.addColorStop(1,"#e11d48");
+    const g=ctx.createRadialGradient(0,-r*.15,2,0,0,r);
+
+    g.addColorStop(0,"#fff2a0");
+    g.addColorStop(.45,"#ff9a00");
+    g.addColorStop(1,"#ef3300");
 
     ctx.fillStyle=g;
     ctx.shadowBlur=16*dpr;
-    ctx.shadowColor="#ff4d94";
+    ctx.shadowColor="#ff6800";
 
     ctx.beginPath();
-    ctx.moveTo(0,r*.95);
-    ctx.bezierCurveTo(-r*1.35,-r*.05,-r*.75,-r*1.15,0,-r*.45);
-    ctx.bezierCurveTo(r*.75,-r*1.15,r*1.35,-r*.05,0,r*.95);
-    ctx.closePath();
+    ctx.moveTo(0,-r*1.25);
+    ctx.quadraticCurveTo(r*1.05,0,0,r);
+    ctx.quadraticCurveTo(-r*1.05,0,0,-r*1.25);
     ctx.fill();
 
-    // brilho
     ctx.shadowBlur=0;
-    ctx.fillStyle="rgba(255,255,255,.55)";
-    ctx.beginPath();
-    ctx.ellipse(-r*.42,-r*.42,r*.18,r*.11,-.7,0,Math.PI*2);
-    ctx.fill();
-
     ctx.restore();
   }
 
@@ -1501,17 +1514,15 @@ button:active{transform:scale(.97)}
     if(weapon>=2){
       ctx.fillRect(-ship.w*.30,-ship.h*.05,ship.w*.05,ship.h*.28);
       ctx.fillRect(ship.w*.25,-ship.h*.05,ship.w*.05,ship.h*.28);
-    }
-    if(weapon>=5){
-      ctx.fillStyle="#ef4444";
-      ctx.fillRect(-ship.w*.50,ship.h*.15,ship.w*.07,ship.h*.18);
-      ctx.fillRect(ship.w*.43,ship.h*.15,ship.w*.07,ship.h*.18);
-    }
-    if(weapon>=4){
       ctx.fillStyle="#f97316";
       ctx.beginPath();
       ctx.arc(0,-ship.h*.62,ship.w*.06,0,Math.PI*2);
       ctx.fill();
+    }
+    if(weapon>=3){
+      ctx.fillStyle="#ef4444";
+      ctx.fillRect(-ship.w*.50,ship.h*.15,ship.w*.07,ship.h*.18);
+      ctx.fillRect(ship.w*.43,ship.h*.15,ship.w*.07,ship.h*.18);
     }
 
     // cockpit
@@ -1653,7 +1664,7 @@ button:active{transform:scale(.97)}
     // bolas de fogo
     for(const b of shots){
       if(!b.ball) continue;
-      drawFire(b.x,b.y,b.r,b.ang);
+      drawFire(b.x,b.y,b.r,Math.PI+b.ang);
     }
 
     // fogo em volta do inimigo especial
@@ -1664,7 +1675,7 @@ button:active{transform:scale(.97)}
       const cx=e.x + Math.cos(s.ang)*s.rad;
       const cy=e.y + Math.sin(s.ang)*s.rad;
 
-      drawFire(cx,cy,10*dpr,Math.sin(s.ang*2)*.3);
+      drawFire(cx,cy,10*dpr,s.ang);
     }
 
     // inimigos
@@ -1831,7 +1842,9 @@ button:active{transform:scale(.97)}
       ctx.shadowColor=banner.color;
       ctx.textAlign="center";
       // quebra em linhas e reduz a fonte para caber na largura da tela
-      const lines=banner.txt.startsWith("UPGRADE! ") ? ["UPGRADE!",banner.txt.slice(9)] : [banner.txt];
+      const lines=banner.txt.startsWith("UPGRADE! ") ? ["UPGRADE!",banner.txt.slice(9)]
+                 : banner.txt.startsWith("ARMA PERDIDA! ") ? ["ARMA PERDIDA!",banner.txt.slice(14)]
+                 : [banner.txt];
       let fs=34*dpr;
       ctx.font="bold "+fs+"px Arial";
       const widest=Math.max(...lines.map(l=>ctx.measureText(l).width));
@@ -2032,7 +2045,7 @@ button:active{transform:scale(.97)}
       g.textAlign="center";
       g.fillStyle="#fff";
       g.font="bold "+(17*dpr)+"px Arial";
-      g.fillText("KARLA — GUERRA NAS ESTRELAS 💘",W/2,28*dpr);
+      g.fillText("KARLA — GUERRA NAS ESTRELAS 🔥",W/2,28*dpr);
       g.fillStyle="#fbbf24";
       g.font="bold "+(14*dpr)+"px Arial";
       g.fillText("Pontos: "+score+"   •   Nível: "+level+"   •   Recorde: "+Math.max(best,score),W/2,54*dpr);
@@ -2048,7 +2061,7 @@ button:active{transform:scale(.97)}
         let file=null;
         try{ file=new File([blob],name,{type:"image/png"}); }catch(e){}
         if(file && navigator.canShare && navigator.canShare({files:[file]})){
-          navigator.share({files:[file],title:"Karla — Guerra nas Estrelas",text:"Fiz "+score+" pontos! 💘"}).catch(()=>{});
+          navigator.share({files:[file],title:"Karla — Guerra nas Estrelas",text:"Fiz "+score+" pontos! 🔥"}).catch(()=>{});
         }else{
           const a=document.createElement("a");
           a.href=URL.createObjectURL(blob);
@@ -2066,7 +2079,7 @@ button:active{transform:scale(.97)}
 
   // ---------- Atualização automática ----------
   // Se existir uma versão mais nova no site, recarrega sozinho (evita cache antigo)
-  const APP_VERSION="20261007213408";
+  const APP_VERSION="20261008033413";
   (function checkUpdate(){
     try{
       const base=location.href.split("?")[0].split("#")[0];
