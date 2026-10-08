@@ -414,6 +414,7 @@ button:active{transform:scale(.97)}
   let ship={x:0,y:0,w:76,h:44};
 
   let shots=[], enemies=[], fires=[], powers=[], stars=[], sparks=[];
+  let rocks=[], meteors=[], rockCd=3, meteorCd=4;
   let particles=[], floaters=[];
 
   let enemyCd=0, fireCd=0, powerCd=8, shotCd=0, nextSpecialAt=10;
@@ -430,6 +431,8 @@ button:active{transform:scale(.97)}
     {pts:5000, name:"+ MÍSSEIS TELEGUIADOS",spread:S6,           rate:.09, color:"#fde68a", glow:"#fbbf24", pierce:true, big:true, balls:true, missiles:true},
     {pts:6000, name:"MODO SUPERNOVA",       spread:[-30,-20,-10,0,10,20,30], rate:.07, color:"#fecaca", glow:"#ef4444", pierce:true, big:true, balls:true, missiles:true}
   ];
+  // dificuldade acompanha o upgrade da nave
+  function tier(){ return weapon; }
   function weaponFor(s){
     let w=0;
     for(let i=0;i<UPGRADES.length;i++) if(s>=UPGRADES[i].pts) w=i;
@@ -495,6 +498,7 @@ button:active{transform:scale(.97)}
     weapon=0; ballCd=0; missileCd=0;
 
     shots=[]; enemies=[]; fires=[]; powers=[]; sparks=[];
+    rocks=[]; meteors=[]; rockCd=3; meteorCd=4;
     particles=[]; floaters=[];
 
     ship={x:W/2,y:shipY(),w:76*dpr,h:44*dpr};
@@ -607,7 +611,7 @@ button:active{transform:scale(.97)}
   function spawnEnemy(special){
     const sz=(special ? 92 : 74) + Math.random()*(special ? 26 : 22);
     const size=sz*dpr;
-    const mult=speed();
+    const mult=speed()*(1+tier()*.12);
 
     const e={
       x:size/2 + Math.random()*(W-size),
@@ -638,15 +642,55 @@ button:active{transform:scale(.97)}
   }
 
   function spawnFire(){
-    const r=(15+Math.random()*12)*dpr;
+    const w=tier();
+    // tamanhos variados: quanto maior o nível, mais variação
+    const rr=w===0 ? 15+Math.random()*12 : 8+Math.random()*(22+w*5);
+    const r=rr*dpr;
+    // bola pequena cai rápido, bola grande cai devagar
+    const base=w===0 ? 230+Math.random()*130 : Math.max(130,560-rr*8)*(.75+Math.random()*.6);
 
     fires.push({
       x:r+Math.random()*(W-2*r),
       y:-2*r,
       r:r,
-      v:(230+Math.random()*130)*dpr*speed(),
-      sway:(Math.random()-.5)*70*dpr,
+      v:base*dpr*speed()*(1+w*.06),
+      sway:(Math.random()-.5)*(70+w*25)*dpr,
       flick:Math.random()*10
+    });
+  }
+
+  // asteroides (a partir de 1000 pts): aguentam vários tiros, os grandes se partem
+  function makeRock(px,py,r,vx,vy){
+    const n=9, pts=[];
+    for(let i=0;i<n;i++) pts.push(.72+Math.random()*.35);
+    rocks.push({
+      x:px,y:py,r:r,
+      hp:1+Math.floor(r/(13*dpr)),
+      vx:vx,vy:vy,
+      rot:Math.random()*6,vr:(Math.random()-.5)*2,
+      pts:pts,flash:0
+    });
+  }
+  function spawnRock(){
+    const w=tier();
+    const r=(16+Math.random()*(18+w*6))*dpr;
+    makeRock(
+      r+Math.random()*(W-2*r),-r*2,r,
+      (Math.random()-.5)*80*dpr,
+      (80+Math.random()*90)*dpr*(1+w*.1)
+    );
+  }
+
+  // meteoros (a partir de 2000 pts): pequenos, muito rápidos e na diagonal
+  function spawnMeteor(){
+    const w=tier();
+    const fromLeft=Math.random()<.5;
+    meteors.push({
+      x:fromLeft ? Math.random()*W*.5 : W*.5+Math.random()*W*.5,
+      y:-20*dpr,
+      r:(5+Math.random()*4)*dpr,
+      vx:(fromLeft?1:-1)*(120+Math.random()*200)*dpr,
+      vy:(480+Math.random()*260)*dpr*(1+w*.06)
     });
   }
 
@@ -807,6 +851,7 @@ button:active{transform:scale(.97)}
       dying-=dt;
       updateEffects(dt);
       for(const e of enemies){ e.y+=e.v*dt*.4; }
+      for(const r of rocks){ r.y+=r.vy*dt*.4; r.rot+=r.vr*dt; }
       if(dying<=0) gameOver();
       return;
     }
@@ -883,15 +928,30 @@ button:active{transform:scale(.97)}
     if(enemyCd<=0){
       spawnEnemy(false);
       enemyCd=Math.max(
-        .20,
-        .52-.02*Math.floor(t/10)
+        .14,
+        (.52-.02*Math.floor(t/10))/(1+tier()*.15)
       );
     }
 
-    // MENOS fogo
+    // MENOS fogo no início; a cada upgrade cai mais fogo
     if(fireCd<=0){
-      spawnFire();
-      fireCd=1.35+Math.random()*.95;
+      const w=tier();
+      const n=1+(Math.random()<w*.18?1:0)+(w>=4&&Math.random()<.4?1:0);
+      for(let k=0;k<n;k++) spawnFire();
+      fireCd=Math.max(.32,(1.35+Math.random()*.95)/(1+w*.45));
+    }
+
+    rockCd-=dt;
+    if(tier()>=1 && rockCd<=0){
+      spawnRock();
+      rockCd=Math.max(.7,3.2-tier()*.4)+Math.random()*1.2;
+    }
+
+    meteorCd-=dt;
+    if(tier()>=2 && meteorCd<=0){
+      const n=tier()>=5?3:tier()>=3?2:1;
+      for(let k=0;k<n;k++) spawnMeteor();
+      meteorCd=Math.max(.6,2.6-tier()*.3)+Math.random();
     }
 
     if(powerCd<=0){
@@ -972,6 +1032,21 @@ button:active{transform:scale(.97)}
     }
     fires=fires.filter(f=>f.y-f.r < H+40*dpr);
 
+    for(const r of rocks){
+      r.x+=r.vx*dt; r.y+=r.vy*dt; r.rot+=r.vr*dt;
+      r.flash=Math.max(0,r.flash-dt);
+    }
+    rocks=rocks.filter(r=>r.y-r.r<H+60*dpr && r.x>-80*dpr && r.x<W+80*dpr);
+
+    for(const m of meteors){
+      m.x+=m.vx*dt; m.y+=m.vy*dt;
+      particles.push({
+        x:m.x,y:m.y,vx:0,vy:0,life:.22,max:.22,
+        size:m.r*1.2,color:Math.random()<.5?"#e0f2fe":"#7dd3fc"
+      });
+    }
+    meteors=meteors.filter(m=>m.y<H+40*dpr && m.x>-40*dpr && m.x<W+40*dpr);
+
     for(const p of powers){
       p.y+=p.v*dt;
       p.ph+=dt*4;
@@ -1049,6 +1124,70 @@ button:active{transform:scale(.97)}
       }
     }
 
+    // tiros x asteroides e meteoros
+    for(let i=rocks.length-1;i>=0;i--){
+      const r=rocks[i];
+      for(let j=shots.length-1;j>=0;j--){
+        const b=shots[j];
+        if(b.pierce && b.hits.has(r)) continue;
+        const dx=b.x-r.x, dy=b.y-r.y, rr=r.r+b.r;
+        if(dx*dx+dy*dy<rr*rr){
+          if(b.pierce) b.hits.add(r); else shots.splice(j,1);
+          r.hp-=b.ball?3:1;
+          r.flash=.08;
+          burst(b.x,b.y,4,["#a8a29e","#d6d3d1"],120,3);
+          if(r.hp<=0){
+            rocks.splice(i,1);
+            const pts=15*mult;
+            score+=pts;
+            burst(r.x,r.y,26,["#a8a29e","#78716c","#d6d3d1","#fbbf24"],260,5);
+            floatText(r.x,r.y,"+"+pts,"#d6d3d1",false);
+            sfx.boom();
+            addShake(3);
+            // asteroide grande se parte em dois
+            if(r.r>30*dpr){
+              for(const s of [-1,1]){
+                makeRock(r.x,r.y,r.r*.55,s*(90+Math.random()*60)*dpr,r.vy*.9);
+              }
+            }
+            break;
+          }
+        }
+      }
+    }
+    for(let i=meteors.length-1;i>=0;i--){
+      const m=meteors[i];
+      for(let j=shots.length-1;j>=0;j--){
+        const b=shots[j];
+        const dx=b.x-m.x, dy=b.y-m.y, rr=m.r+b.r+4*dpr;
+        if(dx*dx+dy*dy<rr*rr){
+          if(!b.pierce) shots.splice(j,1);
+          meteors.splice(i,1);
+          score+=5*mult;
+          burst(m.x,m.y,12,["#e0f2fe","#7dd3fc","#fff"],200,3);
+          break;
+        }
+      }
+    }
+
+    // asteroides e meteoros x aeronave
+    for(let i=rocks.length-1;i>=0;i--){
+      const r=rocks[i];
+      if(circleShip(r.x,r.y,r.r*.8)){
+        burst(r.x,r.y,24,["#a8a29e","#78716c","#d6d3d1"],260,5);
+        rocks.splice(i,1);
+        damage(r.x,r.y);
+      }
+    }
+    for(let i=meteors.length-1;i>=0;i--){
+      const m=meteors[i];
+      if(circleShip(m.x,m.y,m.r)){
+        burst(m.x,m.y,14,["#e0f2fe","#7dd3fc"],220,3);
+        meteors.splice(i,1);
+        damage(m.x,m.y);
+      }
+    }
+
     // fogo x aeronave
     for(let i=fires.length-1;i>=0;i--){
       const f=fires[i];
@@ -1087,6 +1226,7 @@ button:active{transform:scale(.97)}
       weapon=w;
       showBanner("UPGRADE! "+UPGRADES[w].name,"#fbbf24",1.8);
       floatText(ship.x,ship.y-ship.h,"⬆ "+UPGRADES[w].name,"#fbbf24",true);
+      floatText(W/2,H*.46,"⚠ O PERIGO AUMENTOU!","#fb7185",true);
       burst(ship.x,ship.y,40,["#fbbf24","#fde68a","#fff","#38bdf8"],300,4);
       sfx.upgrade();
     }
@@ -1247,6 +1387,45 @@ button:active{transform:scale(.97)}
       ctx.fillRect(s.x,s.y,s.s,s.s*(s.v>50*dpr?2.2:1));
     }
     ctx.globalAlpha=1;
+
+    // asteroides
+    for(const r of rocks){
+      ctx.save();
+      ctx.translate(r.x,r.y);
+      ctx.rotate(r.rot);
+      ctx.beginPath();
+      for(let k=0;k<r.pts.length;k++){
+        const a=k/r.pts.length*Math.PI*2;
+        const d=r.r*r.pts[k];
+        k===0?ctx.moveTo(Math.cos(a)*d,Math.sin(a)*d):ctx.lineTo(Math.cos(a)*d,Math.sin(a)*d);
+      }
+      ctx.closePath();
+      const rg=ctx.createRadialGradient(-r.r*.3,-r.r*.3,1,0,0,r.r);
+      rg.addColorStop(0,r.flash>0?"#fff":"#a8a29e");
+      rg.addColorStop(1,r.flash>0?"#e7e5e4":"#44403c");
+      ctx.fillStyle=rg;
+      ctx.fill();
+      ctx.lineWidth=2*dpr;
+      ctx.strokeStyle="#292524";
+      ctx.stroke();
+      ctx.fillStyle="rgba(41,37,36,.55)";
+      ctx.beginPath();
+      ctx.arc(r.r*.25,r.r*.1,r.r*.18,0,Math.PI*2);
+      ctx.arc(-r.r*.3,r.r*.3,r.r*.12,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // meteoros
+    ctx.shadowBlur=12*dpr;
+    ctx.shadowColor="#7dd3fc";
+    ctx.fillStyle="#f0f9ff";
+    for(const m of meteors){
+      ctx.beginPath();
+      ctx.arc(m.x,m.y,m.r,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.shadowBlur=0;
 
     // fogo aleatório
     for(const f of fires){
