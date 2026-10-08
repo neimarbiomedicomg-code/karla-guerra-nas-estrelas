@@ -392,6 +392,10 @@ button:active{transform:scale(.97)}
       tone("sawtooth",160,30,.7,.25);
       noise(.6,.6,1200);
     },
+    dog(){ [0,.16].forEach(d=>{ tone("square",340,170,.11,.22,d); }); noise(.1,.25,900,"bandpass"); },
+    cat(){ tone("sine",520,860,.18,.25); tone("sine",860,420,.3,.25,.18); },
+    bird(){ [0,.09,.18,.27].forEach(d=>tone("sine",2200,3400,.06,.18,d)); },
+    parrot(){ tone("sawtooth",800,1500,.12,.18); tone("sawtooth",1500,700,.16,.18,.13); tone("square",1100,1300,.1,.1,.3); },
     tick(){ tone("square",700,500,.03,.04); },
     pop(){ noise(.12,.8,5000,"highpass"); tone("sine",900,120,.18,.35); noise(.3,.4,1500); },
     missile(){ tone("sawtooth",500,1200,.15,.08); noise(.12,.15,3000,"highpass"); },
@@ -425,6 +429,7 @@ button:active{transform:scale(.97)}
   let shots=[], enemies=[], fires=[], powers=[], stars=[], sparks=[];
   let rocks=[], meteors=[], rockCd=3, meteorCd=4;
   let balloons=[], balloonCd=4;
+  let pets=[], petCd=5;
   let particles=[], floaters=[];
 
   let enemyCd=0, fireCd=0, powerCd=8, shotCd=0, nextSpecialAt=10;
@@ -510,6 +515,7 @@ button:active{transform:scale(.97)}
     shots=[]; enemies=[]; fires=[]; powers=[]; sparks=[];
     rocks=[]; meteors=[]; rockCd=3; meteorCd=4;
     balloons=[]; balloonCd=4;
+    pets=[]; petCd=5;
     particles=[]; floaters=[];
 
     ship={x:W/2,y:shipY(),w:76*dpr,h:44*dpr};
@@ -738,6 +744,41 @@ button:active{transform:scale(.97)}
     });
   }
 
+  // bichinhos de bônus: cachorro, gato, passarinho e papagaio
+  const PETS=[
+    {emoji:"🐶", name:"AU AU!",  color:"#fbbf24", snd:"dog"},
+    {emoji:"🐱", name:"MIAU!",   color:"#f9a8d4", snd:"cat"},
+    {emoji:"🐦", name:"PIU PIU!",color:"#7dd3fc", snd:"bird"},
+    {emoji:"🦜", name:"CURRUPACO!",color:"#86efac", snd:"parrot"}
+  ];
+  const petSprites={};
+  function petSprite(p){
+    if(petSprites[p.emoji]) return petSprites[p.emoji];
+    const S=160, cv=document.createElement("canvas");
+    cv.width=cv.height=S;
+    const g=cv.getContext("2d");
+    const bg=g.createRadialGradient(S*.38,S*.35,4,S/2,S/2,S/2);
+    bg.addColorStop(0,"#ffffff");
+    bg.addColorStop(1,p.color);
+    g.fillStyle=bg;
+    g.beginPath(); g.arc(S/2,S/2,S/2-4,0,Math.PI*2); g.fill();
+    g.lineWidth=6; g.strokeStyle="#ffffff"; g.stroke();
+    g.font=(S*.62)+"px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+    g.textAlign="center"; g.textBaseline="middle";
+    g.fillText(p.emoji,S/2,S/2+S*.04);
+    petSprites[p.emoji]=cv;
+    return cv;
+  }
+  function spawnPet(){
+    const p=PETS[(Math.random()*PETS.length)|0];
+    const s=(52+Math.random()*12)*dpr;
+    pets.push({
+      x:s/2+Math.random()*(W-s), y:-s, w:s,
+      vy:(85+Math.random()*50)*dpr,
+      ph:Math.random()*6, type:p
+    });
+  }
+
   function spawnPower(){
     const s=50*dpr;
 
@@ -897,6 +938,7 @@ button:active{transform:scale(.97)}
       for(const e of enemies){ e.y+=e.v*dt*.4; }
       for(const r of rocks){ r.y+=r.vy*dt*.4; r.rot+=r.vr*dt; }
       for(const bl of balloons){ bl.y+=bl.vy*dt*.4; }
+      for(const pt of pets){ pt.y+=pt.vy*dt*.4; }
       if(dying<=0) gameOver();
       return;
     }
@@ -999,6 +1041,12 @@ button:active{transform:scale(.97)}
       meteorCd=Math.max(.6,2.6-tier()*.3)+Math.random();
     }
 
+    petCd-=dt;
+    if(petCd<=0){
+      spawnPet();
+      petCd=6+Math.random()*6;
+    }
+
     balloonCd-=dt;
     if(tier()>=1 && balloonCd<=0){
       spawnBalloon();
@@ -1098,6 +1146,13 @@ button:active{transform:scale(.97)}
     }
     meteors=meteors.filter(m=>m.y<H+40*dpr && m.x>-40*dpr && m.x<W+40*dpr);
 
+    for(const pt of pets){
+      pt.y+=pt.vy*dt;
+      pt.ph+=dt*2.2;
+      pt.x+=Math.sin(pt.ph)*40*dpr*dt;
+    }
+    pets=pets.filter(pt=>pt.y-pt.w/2<H+40*dpr);
+
     for(const bl of balloons){
       bl.y+=bl.vy*dt;
       bl.ph+=dt*1.6;
@@ -1180,6 +1235,35 @@ button:active{transform:scale(.97)}
           floatText(e.x,H-30*dpr,"ESCAPOU!","#fb7185",false);
         }
         damage();
+      }
+    }
+
+    // bichinhos: tiro = +50, pegar com a nave = +100 (nunca tiram vida)
+    function petBonus(pt,pts){
+      score+=pts*mult;
+      burst(pt.x,pt.y,26,[pt.type.color,"#fff","#fde68a"],260,4);
+      floatText(pt.x,pt.y,pt.type.name+" +"+(pts*mult),pt.type.color,true);
+      sfx[pt.type.snd]();
+    }
+    for(let i=pets.length-1;i>=0;i--){
+      const pt=pets[i];
+      let got=false;
+      for(let j=shots.length-1;j>=0;j--){
+        const b=shots[j];
+        const dx=b.x-pt.x, dy=b.y-pt.y, rr=pt.w/2+b.r;
+        if(dx*dx+dy*dy<rr*rr){
+          if(!b.pierce) shots.splice(j,1);
+          pets.splice(i,1);
+          petBonus(pt,50);
+          got=true;
+          break;
+        }
+      }
+      if(got) continue;
+      const dx=pt.x-ship.x, dy=pt.y-ship.y, rr=pt.w*.5+ship.w*.35;
+      if(dx*dx+dy*dy<rr*rr){
+        pets.splice(i,1);
+        petBonus(pt,100);
       }
     }
 
@@ -1668,6 +1752,19 @@ button:active{transform:scale(.97)}
       ctx.fillText(bl.hp,bl.x,by-4*dpr);
     }
 
+    // bichinhos
+    for(const pt of pets){
+      const spr=petSprite(pt.type);
+      ctx.save();
+      ctx.translate(pt.x,pt.y);
+      ctx.rotate(Math.sin(pt.ph)*.25);
+      ctx.shadowBlur=14*dpr;
+      ctx.shadowColor=pt.type.color;
+      ctx.drawImage(spr,-pt.w/2,-pt.w/2,pt.w,pt.w);
+      ctx.restore();
+    }
+    ctx.shadowBlur=0;
+
     // powerup de imunidade
     for(const p of powers){
       const pulse=1+Math.sin(p.ph)*.06;
@@ -1969,7 +2066,7 @@ button:active{transform:scale(.97)}
 
   // ---------- Atualização automática ----------
   // Se existir uma versão mais nova no site, recarrega sozinho (evita cache antigo)
-  const APP_VERSION="20261007213105";
+  const APP_VERSION="20261007213408";
   (function checkUpdate(){
     try{
       const base=location.href.split("?")[0].split("#")[0];
