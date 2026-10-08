@@ -186,6 +186,8 @@ button:active{transform:scale(.97)}
 }
 #pause{right:10px}
 #mute{right:96px}
+#snap{right:182px}
+#flashfx{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:6;transition:opacity .35s}
 @media (max-width:720px){
   #hud{grid-template-columns:repeat(4,1fr)}
 }
@@ -207,7 +209,9 @@ button:active{transform:scale(.97)}
   <div id="stage">
     <canvas id="game"></canvas>
 
+    <button id="snap" class="ctl">📸 FOTO</button>
     <button id="mute" class="ctl">SOM: ON</button>
+    <div id="flashfx"></div>
     <button id="pause" class="ctl">PAUSAR</button>
 
     <div id="overlay">
@@ -222,7 +226,7 @@ button:active{transform:scale(.97)}
         <div class="keys" style="margin:0 0 8px;opacity:.85">A cada 1000 pontos sua nave ganha uma arma nova ⬆</div>
         <div id="record">Recorde: 0</div>
         <button id="start">JOGAR</button>
-        <div class="keys">Computador: ← → ou A/D movem • Espaço atira • P pausa • M som</div>
+        <div class="keys">Computador: ← → ou A/D movem • Espaço atira • P pausa • M som • F foto</div>
       </div>
     </div>
   </div>
@@ -1793,6 +1797,8 @@ button:active{transform:scale(.97)}
   // TOUCH
   c.addEventListener("touchstart",e=>{
     if(!running || paused) return;
+    // 2 ou mais dedos: libera gestos do sistema (ex.: print com 3 dedos)
+    if(e.touches.length>1){ touching=false; return; }
     e.preventDefault();
     touching=true;
     setTarget(e.touches[0].clientX);
@@ -1801,6 +1807,7 @@ button:active{transform:scale(.97)}
 
   c.addEventListener("touchmove",e=>{
     if(!running) return;
+    if(e.touches.length>1){ touching=false; return; }
     e.preventDefault();
     setTarget(e.touches[0].clientX);
   },{passive:false});
@@ -1906,9 +1913,63 @@ button:active{transform:scale(.97)}
 
   start.onclick=startGame;
 
+  // ---------- Foto da tela (botão 📸) ----------
+  const snapBtn=document.getElementById("snap");
+  const flashfx=document.getElementById("flashfx");
+
+  function takePhoto(){
+    try{
+      if(running && !paused && !dying) draw();
+      const head=Math.round(70*dpr);
+      const out=document.createElement("canvas");
+      out.width=W; out.height=H+head;
+      const g=out.getContext("2d");
+      g.fillStyle="#050816";
+      g.fillRect(0,0,out.width,out.height);
+      g.drawImage(c,0,head);
+      // faixa com nome do jogo e pontuação
+      const hg=g.createLinearGradient(0,0,W,0);
+      hg.addColorStop(0,"#1e1b4b"); hg.addColorStop(1,"#831843");
+      g.fillStyle=hg;
+      g.fillRect(0,0,W,head);
+      g.textAlign="center";
+      g.fillStyle="#fff";
+      g.font="bold "+(17*dpr)+"px Arial";
+      g.fillText("KARLA — GUERRA NAS ESTRELAS 💘",W/2,28*dpr);
+      g.fillStyle="#fbbf24";
+      g.font="bold "+(14*dpr)+"px Arial";
+      g.fillText("Pontos: "+score+"   •   Nível: "+level+"   •   Recorde: "+Math.max(best,score),W/2,54*dpr);
+
+      flashfx.style.opacity=".85";
+      setTimeout(()=>{ flashfx.style.opacity="0"; },60);
+      tone("triangle",1200,600,.08,.2);
+      noise(.08,.3,6000,"highpass");
+
+      out.toBlob(blob=>{
+        if(!blob) return;
+        const name="karla-guerra-nas-estrelas-"+score+".png";
+        let file=null;
+        try{ file=new File([blob],name,{type:"image/png"}); }catch(e){}
+        if(file && navigator.canShare && navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:"Karla — Guerra nas Estrelas",text:"Fiz "+score+" pontos! 💘"}).catch(()=>{});
+        }else{
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob);
+          a.download=name;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+        }
+      },"image/png");
+    }catch(e){}
+  }
+
+  snapBtn.onclick=()=>{ initAudio(); takePhoto(); };
+  window.addEventListener("keydown",e=>{ if(e.key==="f"||e.key==="F") takePhoto(); });
+
   // ---------- Atualização automática ----------
   // Se existir uma versão mais nova no site, recarrega sozinho (evita cache antigo)
-  const APP_VERSION="20261007212700";
+  const APP_VERSION="20261007213105";
   (function checkUpdate(){
     try{
       const base=location.href.split("?")[0].split("#")[0];
